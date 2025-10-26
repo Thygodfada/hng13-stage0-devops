@@ -1,34 +1,32 @@
-# HNG DevOps Stage 1 — Automated Deployment Script
+# DevOps Stage 2 — Blue/Green Deployment with NGINX Failover
 
 ## 🚀 Overview
 
-This repository contains a production-grade Bash script (`deploy.sh`) that automates the setup, deployment, and configuration of a Dockerized application on a remote Ubuntu server. It is designed to reflect real-world DevOps workflows including provisioning, containerization, reverse proxy setup, and validation.
+This project implements a Blue/Green deployment architecture using Docker Compose and NGINX. Two identical Node.js services (Blue and Green) are deployed as pre-built containers. NGINX routes traffic to the active pool (Blue by default) and automatically fails over to the backup (Green) if the primary becomes unhealthy.
 
 ---
 
-## 🛠️ Features
+## 🧱 Architecture
 
-- Collects deployment parameters interactively
-- Authenticates and clones a GitHub repository using a Personal Access Token (PAT)
-- SSH into a remote Ubuntu server using a `.pem` key
-- Installs Docker, Docker Compose, NGINX, and Git
-- Builds and runs the Docker container
-- Configures NGINX as a reverse proxy to the container
-- Validates deployment and logs all actions to a timestamped file
+- **Blue App**: Primary service exposed on port 8081
+- **Green App**: Backup service exposed on port 8082
+- **NGINX**: Public entrypoint on port 8080, routes traffic to Blue or Green based on health
 
 ---
 
-## 📦 Prerequisites
+## 📦 Features
 
-- A remote Ubuntu server (e.g., EC2 instance)
-- SSH access via a `.pem` key
-- A GitHub repository with a valid `Dockerfile`
-- A GitHub Personal Access Token (PAT) with repo access
+- Health-based failover using NGINX upstreams
+- Retry logic for 5xx and timeout errors
+- Manual chaos injection via `/chaos/start` and `/chaos/stop`
+- Header forwarding: `X-App-Pool`, `X-Release-Id`
+- Fully parameterized via `.env` file
 
 ---
 
-## 📄 Usage
+## 📄 Setup Instructions
 
-Make the script executable:
+### 1. Clone the Repository
 ```bash
-chmod +x deploy.sh
+git clone https://github.com/<your-username>/<your-repo>.git
+cd <your-repo>
