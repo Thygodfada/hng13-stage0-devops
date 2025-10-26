@@ -65,6 +65,9 @@ Expected headers:
 --------------------
 Chaos endpoint is present but non-functional.
 
+The /chaos/start?mode=error endpoint is present but does not simulate failure. To validate NGINX failover, the Blue container was manually stopped. 
+NGINX correctly rerouted traffic to Green, confirming the expected behavior.
+
 To test failover manually:
 - Stop Blue container:
   docker stop comfy-bluegreen-app_blue-1
