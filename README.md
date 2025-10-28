@@ -1,10 +1,8 @@
 # DevOps Stage 2 — Blue/Green Deployment with NGINX Failover
 
 ## 🚀 Overview
-
-This project implements a Blue/Green deployment architecture using Docker Compose and NGINX. Two identical Node.js services (Blue and Green) are deployed as pre-built containers. NGINX routes traffic to the active pool (Blue by default) and automatically fails over to the backup (Green) if the primary becomes unhealthy.
-
----
+This project implements a Blue/Green deployment pattern using Docker Compose and NGINX as a reverse proxy with automatic failover. Two identical Node.js services (blue and green) run behind NGINX. Blue is the primary, Green is the backup. If Blue fails, NGINX automatically retries requests against Green with no downtime for clients.
+--
 
 ## 🧱 Architecture
 
@@ -23,60 +21,72 @@ This project implements a Blue/Green deployment architecture using Docker Compos
 - Fully parameterized via `.env` file
 
 ---
+Project Structure
+- docker-compose.yml
+- .env.example
+- nginx/
+  - nginx.template.conf
+  - nginx.conf (generated from template)
+- README.md
+- DECISION.md (optional notes)
 
-## 📄 Setup Instructions
-1. Clone the Repository
------------------------
-git clone https://github.com/Thygodfada/hng13-stage0-devops.git
-cd hng13-stage0-devops
+Environment Variables
+Copy .env.example to .env and adjust as needed:
 
-2. Create a .env File
----------------------
-Create a file named `.env` in the root directory with the following content:
+BLUE_IMAGE=yimikaade/wonderful:devops-stage-two
+GREEN_IMAGE=yimikaade/wonderful:devops-stage-two
+ACTIVE_POOL=blue
+RELEASE_ID_BLUE=v1.0.0
+RELEASE_ID_GREEN=v1.0.1
 
-BLUE_PORT=8081
-GREEN_PORT=8082
-NGINX_PORT=8080
+BLUE_IMAGE / GREEN_IMAGE: Prebuilt app images (do not rebuild).
+ACTIVE_POOL: Which pool is active by default (blue or green).
+RELEASE_ID_*: Passed into the apps so they return the correct X-Release-Id.
 
-3. Start the Application
-------------------------
-Run the stack using Docker Compose:
+Running the Stack
+1. Export environment variables and generate the NGINX config:
+   export $(grep -v '^#' .env | xargs)
+   envsubst < nginx/nginx.template.conf > nginx/nginx.conf
 
-docker compose --env-file .env up
+2. Start services:
+   docker compose up -d --build
 
-This starts:
-- Blue app on port 8081
-- Green app on port 8082
-- NGINX proxy on port 8080
+3. Verify containers:
+   docker ps
 
-4. Test Routing
----------------
-Use these endpoints:
+Endpoints
+- NGINX Proxy (public entrypoint): http://<PUBLIC_IP>:8080
+- Blue app (direct): http://<PUBLIC_IP>:8081
+- Green app (direct): http://<PUBLIC_IP>:8082
 
-http://localhost:8080/version   → Routed via NGINX
-http://localhost:8081/version   → Direct to Blue
-http://localhost:8082/version   → Direct to Green
+Health & Version Checks
+- GET /version → returns JSON body and headers:
+  X-App-Pool: blue|green
+  X-Release-Id: v1.0.0|v1.0.1
+- GET /healthz → liveness probe
+- POST /chaos/start?mode=error|timeout → simulate failure
+- POST /chaos/stop → stop failure simulation
 
-Expected headers:
-- X-App-Pool: blue or green
-- X-Release-Id: v1.0.0 or v1.0.1
+Failover Behavior
+- By default, all traffic goes to Blue.
+- If Blue fails (timeout or 5xx):
+  - NGINX retries the request against Green immediately.
+  - Client still receives 200 OK.
+- Headers are preserved and forwarded unchanged.
 
-5. Simulate Failover
---------------------
-Chaos endpoint is present but non-functional.
+Example Test Flow
+# Baseline: Blue active
+curl -i http://localhost:8080/version
+# → X-App-Pool: blue, X-Release-Id: v1.0.0
 
-The /chaos/start?mode=error endpoint is present but does not simulate failure. To validate NGINX failover, the Blue container was manually stopped. 
-NGINX correctly rerouted traffic to Green, confirming the expected behavior.
+# Trigger chaos on Blue
+curl -X POST http://localhost:8081/chaos/start?mode=error
 
-To test failover manually:
-- Stop Blue container:
-  docker stop comfy-bluegreen-app_blue-1
+# Now NGINX serves from Green
+curl -i http://localhost:8080/version
+# → X-App-Pool: green, X-Release-Id: v1.0.1
 
-- Test NGINX routing:
-  curl http://localhost:8080/version
-  → Should now route to Green
-
-- Restart Blue:
-  docker start comfy-bluegreen-app_blue-1
+# Stop chaos
+curl -X POST http://localhost:8081/chaos/stop
 
 --------------------------------------------------
